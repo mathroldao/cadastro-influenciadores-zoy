@@ -29,7 +29,6 @@ st.markdown("""
 h1,h2,h3{color:#2B2B36}
 .stButton>button{background:#7C3AED;color:white;border:none;border-radius:10px;height:46px;font-weight:700}
 .stButton>button:hover{background:#6D28D9;color:white}
-.card{border:1px solid #e5e7eb;border-radius:16px;padding:24px;background:white;margin-bottom:18px}
 </style>
 """, unsafe_allow_html=True)
 
@@ -51,8 +50,23 @@ def listar():
     return conectar().get_all_records()
 
 def salvar(dados):
-    ws = conectar()
-    ws.append_row([dados.get(c, "") for c in COLUMNS])
+    conectar().append_row([dados.get(c, "") for c in COLUMNS])
+
+def formata_valor(v):
+    try:
+        return f"{float(v):,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+    except:
+        return str(v)
+
+def achar_template(nome):
+    caminhos = [
+        f"templates/{nome}",
+        nome
+    ]
+    for caminho in caminhos:
+        if os.path.exists(caminho):
+            return caminho
+    return None
 
 def replace_docx(template_path, dados):
     doc = Document(template_path)
@@ -80,17 +94,11 @@ def replace_docx(template_path, dados):
     bio.seek(0)
     return bio
 
-def formata_valor(v):
-    try:
-        return f"{float(v):,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-    except:
-        return str(v)
-
 menu = st.sidebar.radio("Menu", ["Cadastro Público", "Jurídico"])
 
 if menu == "Cadastro Público":
     st.title("💜 Cadastro de Influenciadores | Zoy")
-    st.info("Este cadastro será utilizado para formalização contratual entre o influenciador e a Agência Zoy. Tempo médio: **3 minutos**.")
+    st.info("Este cadastro será utilizado apenas para coleta de dados cadastrais e formalização interna pela equipe jurídica da Zoy.")
 
     with st.form("form_cadastro"):
         st.subheader("🏢 Dados da Empresa")
@@ -192,7 +200,7 @@ if menu == "Jurídico":
         b = busca.lower()
         df = df[df.astype(str).apply(lambda x: x.str.lower().str.contains(b)).any(axis=1)]
 
-    for i, row in df.iterrows():
+    for _, row in df.iterrows():
         with st.expander(f"{row['RAZAO_SOCIAL']} | {row['INSTAGRAM']} | {row['CLIENTE']} - {row['CAMPANHA']}"):
             c1, c2 = st.columns(2)
 
@@ -204,7 +212,6 @@ if menu == "Jurídico":
                 st.write(f"**E-mail:** {row['EMAIL']}")
                 st.write(f"**Telefone:** {row['TELEFONE']}")
                 st.write(f"**Instagram:** {row['INSTAGRAM']}")
-                st.write(f"**TikTok:** {row['TIKTOK']}")
 
             with c2:
                 st.write("### Campanha")
@@ -220,11 +227,14 @@ if menu == "Jurídico":
             dados_doc = row.to_dict()
             dados_doc["DATA_EXTENSO"] = datetime.now().strftime("%d/%m/%Y")
 
+            contrato_path = achar_template("contrato.docx")
+            carta_path = achar_template("carta.docx")
+
             col_a, col_b = st.columns(2)
 
             with col_a:
-                if os.path.exists("templates/contrato.docx"):
-                    contrato = replace_docx("templates/contrato.docx", dados_doc)
+                if contrato_path:
+                    contrato = replace_docx(contrato_path, dados_doc)
                     st.download_button(
                         "📄 Baixar Contrato",
                         contrato,
@@ -232,11 +242,11 @@ if menu == "Jurídico":
                         mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
                     )
                 else:
-                    st.warning("Falta subir templates/contrato.docx")
+                    st.warning("Arquivo contrato.docx não encontrado.")
 
             with col_b:
-                if os.path.exists("templates/carta.docx"):
-                    carta = replace_docx("templates/carta.docx", dados_doc)
+                if carta_path:
+                    carta = replace_docx(carta_path, dados_doc)
                     st.download_button(
                         "📄 Baixar Carta",
                         carta,
@@ -244,4 +254,4 @@ if menu == "Jurídico":
                         mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
                     )
                 else:
-                    st.warning("Falta subir templates/carta.docx")
+                    st.warning("Arquivo carta.docx não encontrado.")
