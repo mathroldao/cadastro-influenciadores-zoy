@@ -5,58 +5,102 @@ from google.oauth2.service_account import Credentials
 from docx import Document
 from io import BytesIO
 from datetime import datetime
+from urllib.parse import urlencode
 import uuid
 import os
 
 APP_NAME = "Cadastro de Influenciadores | Zoy"
 SHEET_NAME = "[ZOY] Cadastro Influenciadores | Base"
 WORKSHEET_NAME = "Cadastro"
+BASE_URL = "https://cadastro-zoy.streamlit.app/"
 
 COLUMNS = [
-    "ID","DATA_CADASTRO","STATUS","RAZAO_SOCIAL","CNPJ","REPRESENTANTE_LEGAL",
-    "EMAIL","TELEFONE","INSTAGRAM","TIKTOK","CEP","ENDERECO","NUMERO","COMPLEMENTO",
-    "BAIRRO","CIDADE","ESTADO","BANCO","AGENCIA","CONTA","TIPO_CONTA","PIX",
-    "CLIENTE","CAMPANHA","VALOR_CACHE","ESCOPO","DIREITO_IMAGEM","EXCLUSIVIDADE",
-    "REPOST","IMPULSIONAMENTO","CONTRATO_GERADO","CARTA_GERADA","LINK_CONTRATO",
-    "LINK_CARTA","DATA_FORMALIZACAO","D4SIGN_STATUS","D4SIGN_ENVELOPE_ID","OBSERVACOES"
+    "ID", "DATA_CADASTRO", "STATUS", "RAZAO_SOCIAL", "CNPJ", "REPRESENTANTE_LEGAL",
+    "EMAIL", "TELEFONE", "INSTAGRAM", "TIKTOK", "CEP", "ENDERECO", "NUMERO", "COMPLEMENTO",
+    "BAIRRO", "CIDADE", "ESTADO", "BANCO", "AGENCIA", "CONTA", "TIPO_CONTA", "PIX",
+    "CLIENTE", "CAMPANHA", "VALOR_CACHE", "ESCOPO", "DIREITO_IMAGEM", "EXCLUSIVIDADE",
+    "REPOST", "IMPULSIONAMENTO", "CONTRATO_GERADO", "CARTA_GERADA", "LINK_CONTRATO",
+    "LINK_CARTA", "DATA_FORMALIZACAO", "D4SIGN_STATUS", "D4SIGN_ENVELOPE_ID", "OBSERVACOES"
 ]
 
 st.set_page_config(page_title=APP_NAME, page_icon="💜", layout="wide")
 
 st.markdown("""
 <style>
-.block-container{max-width:1100px;padding-top:30px}
-h1,h2,h3{color:#2B2B36}
-.stButton>button{background:#7C3AED;color:white;border:none;border-radius:10px;height:46px;font-weight:700}
-.stButton>button:hover{background:#6D28D9;color:white}
+.block-container{
+    max-width:1100px;
+    padding-top:30px;
+    padding-bottom:60px;
+}
+h1,h2,h3{
+    color:#2B2B36;
+}
+.stButton>button{
+    background:#7C3AED;
+    color:white;
+    border:none;
+    border-radius:10px;
+    height:46px;
+    font-weight:700;
+}
+.stButton>button:hover{
+    background:#6D28D9;
+    color:white;
+}
+[data-testid="stSidebar"]{
+    background:#F5F3FF;
+}
 </style>
 """, unsafe_allow_html=True)
 
+
 def conectar():
-    scopes = ["https://www.googleapis.com/auth/spreadsheets","https://www.googleapis.com/auth/drive"]
-    creds = Credentials.from_service_account_info(st.secrets["gcp_service_account"], scopes=scopes)
+    scopes = [
+        "https://www.googleapis.com/auth/spreadsheets",
+        "https://www.googleapis.com/auth/drive"
+    ]
+    creds = Credentials.from_service_account_info(
+        st.secrets["gcp_service_account"],
+        scopes=scopes
+    )
     client = gspread.authorize(creds)
     sheet = client.open(SHEET_NAME)
+
     try:
         ws = sheet.worksheet(WORKSHEET_NAME)
-    except:
+    except Exception:
         ws = sheet.add_worksheet(title=WORKSHEET_NAME, rows=1000, cols=50)
+
     if ws.row_values(1) != COLUMNS:
         ws.clear()
         ws.append_row(COLUMNS)
+
     return ws
+
 
 def listar():
     return conectar().get_all_records()
 
+
 def salvar(dados):
     conectar().append_row([dados.get(c, "") for c in COLUMNS])
+
 
 def formata_valor(v):
     try:
         return f"{float(v):,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-    except:
+    except Exception:
         return str(v)
+
+
+def valor_para_float(v):
+    try:
+        if isinstance(v, str):
+            v = v.replace("R$", "").replace(".", "").replace(",", ".").strip()
+        return float(v)
+    except Exception:
+        return 0.0
+
 
 def achar_template(nome):
     caminhos = [
@@ -67,6 +111,7 @@ def achar_template(nome):
         if os.path.exists(caminho):
             return caminho
     return None
+
 
 def replace_docx(template_path, dados):
     doc = Document(template_path)
@@ -94,11 +139,30 @@ def replace_docx(template_path, dados):
     bio.seek(0)
     return bio
 
-menu = st.sidebar.radio("Menu", ["Cadastro Público", "Jurídico"])
+
+menu = st.sidebar.radio(
+    "Menu",
+    ["Cadastro Público", "Jurídico"]
+)
+
 
 if menu == "Cadastro Público":
+    params = st.query_params
+
+    cliente_url = params.get("cliente", "")
+    campanha_url = params.get("campanha", "")
+    valor_url = params.get("valor", "0")
+    escopo_url = params.get("escopo", "")
+    direito_url = params.get("direito_imagem", "N/A")
+    exclusividade_url = params.get("exclusividade", "N/A")
+    repost_url = params.get("repost", "N/A")
+    impulsionamento_url = params.get("impulsionamento", "N/A")
+
     st.title("💜 Cadastro de Influenciadores | Zoy")
-    st.info("Este cadastro será utilizado apenas para coleta de dados cadastrais e formalização interna pela equipe jurídica da Zoy.")
+    st.info(
+        "Este cadastro será utilizado apenas para coleta de dados cadastrais e "
+        "formalização interna pela equipe jurídica da Zoy."
+    )
 
     with st.form("form_cadastro"):
         st.subheader("🏢 Dados da Empresa")
@@ -129,64 +193,107 @@ if menu == "Cadastro Público":
         pix = st.text_input("Chave Pix")
 
         st.subheader("📄 Dados da Campanha")
-        cliente = st.text_input("Cliente *")
-        campanha = st.text_input("Campanha *")
-        valor = st.number_input("Valor do cachê negociado", min_value=0.0, step=100.0)
-        escopo = st.text_area("Escopo contratado *")
-        direito = st.text_input("Direito de imagem", value="N/A")
-        exclusividade = st.text_input("Exclusividade", value="N/A")
-        repost = st.text_input("Repost", value="N/A")
-        impulsionamento = st.text_input("Impulsionamento", value="N/A")
+        cliente = st.text_input("Cliente *", value=cliente_url)
+        campanha = st.text_input("Campanha *", value=campanha_url)
+        valor = st.number_input(
+            "Valor do cachê negociado",
+            min_value=0.0,
+            step=100.0,
+            value=valor_para_float(valor_url)
+        )
+        escopo = st.text_area("Escopo contratado *", value=escopo_url)
+        direito = st.text_input("Direito de imagem", value=direito_url)
+        exclusividade = st.text_input("Exclusividade", value=exclusividade_url)
+        repost = st.text_input("Repost", value=repost_url)
+        impulsionamento = st.text_input("Impulsionamento", value=impulsionamento_url)
 
         enviar = st.form_submit_button("Enviar Cadastro")
 
     if enviar:
-        dados = {
-            "ID": str(uuid.uuid4()),
-            "DATA_CADASTRO": datetime.now().strftime("%d/%m/%Y %H:%M"),
-            "STATUS": "Pendente",
-            "RAZAO_SOCIAL": razao,
-            "CNPJ": cnpj,
-            "REPRESENTANTE_LEGAL": representante,
-            "EMAIL": email,
-            "TELEFONE": telefone,
-            "INSTAGRAM": instagram,
-            "TIKTOK": tiktok,
-            "CEP": cep,
-            "ENDERECO": endereco,
-            "NUMERO": numero,
-            "COMPLEMENTO": complemento,
-            "BAIRRO": bairro,
-            "CIDADE": cidade,
-            "ESTADO": estado,
-            "BANCO": banco,
-            "AGENCIA": agencia,
-            "CONTA": conta,
-            "TIPO_CONTA": tipo_conta,
-            "PIX": pix,
-            "CLIENTE": cliente,
-            "CAMPANHA": campanha,
-            "VALOR_CACHE": formata_valor(valor),
-            "ESCOPO": escopo,
-            "DIREITO_IMAGEM": direito,
-            "EXCLUSIVIDADE": exclusividade,
-            "REPOST": repost,
-            "IMPULSIONAMENTO": impulsionamento,
-            "CONTRATO_GERADO": "Não",
-            "CARTA_GERADA": "Não",
-            "LINK_CONTRATO": "",
-            "LINK_CARTA": "",
-            "DATA_FORMALIZACAO": "",
-            "D4SIGN_STATUS": "",
-            "D4SIGN_ENVELOPE_ID": "",
-            "OBSERVACOES": ""
-        }
-        salvar(dados)
-        st.success("Cadastro enviado com sucesso! O time jurídico da Zoy recebeu suas informações.")
-        st.balloons()
+        obrigatorios = [razao, cnpj, representante, email, telefone, instagram, cliente, campanha, escopo]
+
+        if not all(str(campo).strip() for campo in obrigatorios):
+            st.error("Preencha todos os campos obrigatórios marcados com *.")
+        else:
+            dados = {
+                "ID": str(uuid.uuid4()),
+                "DATA_CADASTRO": datetime.now().strftime("%d/%m/%Y %H:%M"),
+                "STATUS": "Pendente",
+                "RAZAO_SOCIAL": razao,
+                "CNPJ": cnpj,
+                "REPRESENTANTE_LEGAL": representante,
+                "EMAIL": email,
+                "TELEFONE": telefone,
+                "INSTAGRAM": instagram,
+                "TIKTOK": tiktok,
+                "CEP": cep,
+                "ENDERECO": endereco,
+                "NUMERO": numero,
+                "COMPLEMENTO": complemento,
+                "BAIRRO": bairro,
+                "CIDADE": cidade,
+                "ESTADO": estado,
+                "BANCO": banco,
+                "AGENCIA": agencia,
+                "CONTA": conta,
+                "TIPO_CONTA": tipo_conta,
+                "PIX": pix,
+                "CLIENTE": cliente,
+                "CAMPANHA": campanha,
+                "VALOR_CACHE": formata_valor(valor),
+                "ESCOPO": escopo,
+                "DIREITO_IMAGEM": direito,
+                "EXCLUSIVIDADE": exclusividade,
+                "REPOST": repost,
+                "IMPULSIONAMENTO": impulsionamento,
+                "CONTRATO_GERADO": "Não",
+                "CARTA_GERADA": "Não",
+                "LINK_CONTRATO": "",
+                "LINK_CARTA": "",
+                "DATA_FORMALIZACAO": "",
+                "D4SIGN_STATUS": "",
+                "D4SIGN_ENVELOPE_ID": "",
+                "OBSERVACOES": ""
+            }
+            salvar(dados)
+            st.success("Cadastro enviado com sucesso! O time jurídico da Zoy recebeu suas informações.")
+            st.balloons()
+
 
 if menu == "Jurídico":
     st.title("⚖️ Jurídico | Cadastros Recebidos")
+
+    st.subheader("🔗 Criar link para influenciador")
+
+    with st.form("form_link"):
+        link_cliente = st.text_input("Cliente")
+        link_campanha = st.text_input("Campanha")
+        link_valor = st.text_input("Valor do cachê")
+        link_escopo = st.text_area("Escopo contratado")
+        link_direito = st.text_input("Direito de imagem", value="N/A")
+        link_exclusividade = st.text_input("Exclusividade", value="N/A")
+        link_repost = st.text_input("Repost", value="N/A")
+        link_impulsionamento = st.text_input("Impulsionamento", value="N/A")
+        gerar_link = st.form_submit_button("Gerar Link")
+
+    if gerar_link:
+        query = urlencode({
+            "cliente": link_cliente,
+            "campanha": link_campanha,
+            "valor": link_valor,
+            "escopo": link_escopo,
+            "direito_imagem": link_direito,
+            "exclusividade": link_exclusividade,
+            "repost": link_repost,
+            "impulsionamento": link_impulsionamento
+        })
+
+        link_final = f"{BASE_URL}?{query}"
+
+        st.success("Link criado com sucesso:")
+        st.code(link_final)
+
+    st.divider()
 
     registros = listar()
     if not registros:
@@ -201,7 +308,9 @@ if menu == "Jurídico":
         df = df[df.astype(str).apply(lambda x: x.str.lower().str.contains(b)).any(axis=1)]
 
     for _, row in df.iterrows():
-        with st.expander(f"{row['RAZAO_SOCIAL']} | {row['INSTAGRAM']} | {row['CLIENTE']} - {row['CAMPANHA']}"):
+        titulo = f"{row['RAZAO_SOCIAL']} | {row['INSTAGRAM']} | {row['CLIENTE']} - {row['CAMPANHA']}"
+
+        with st.expander(titulo):
             c1, c2 = st.columns(2)
 
             with c1:
@@ -212,6 +321,7 @@ if menu == "Jurídico":
                 st.write(f"**E-mail:** {row['EMAIL']}")
                 st.write(f"**Telefone:** {row['TELEFONE']}")
                 st.write(f"**Instagram:** {row['INSTAGRAM']}")
+                st.write(f"**TikTok:** {row['TIKTOK']}")
 
             with c2:
                 st.write("### Campanha")
